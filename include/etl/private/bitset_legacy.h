@@ -311,7 +311,7 @@ namespace etl
     //*************************************************************************
     ibitset& set()
     {
-      ::memset(pdata, 0xFF, Number_Of_Elements);
+      etl::fill_n(pdata, Number_Of_Elements, -1);
       pdata[Number_Of_Elements - 1U] = Top_Mask;
 
       return *this;
@@ -512,7 +512,7 @@ namespace etl
     //*************************************************************************
     ibitset& reset()
     {
-      ::memset(pdata, 0x00, Number_Of_Elements);
+      etl::fill_n(pdata, Number_Of_Elements, 0);
 
       return *this;
     }
