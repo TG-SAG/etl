@@ -167,7 +167,11 @@ namespace etl
     ~vector_base() {}
   #endif
 
+#ifdef MODULE_TEST
+  size_type CAPACITY; // In the NCK module tests, the capacity is not const to allow modification for the etldvector class
+#else  
     const size_type CAPACITY; ///< The maximum number of elements in the vector.
+#endif    
     ETL_DECLARE_DEBUG_COUNT;  ///< Internal debugging.
   };
 } // namespace etl
