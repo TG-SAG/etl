@@ -37,6 +37,7 @@ SOFTWARE.
 #include "etl/u32string.h"
 #include "etl/wstring.h"
 #include "etl/private/bitset_new.h"
+#include "bitset_test_cases.h"
 
 namespace
 {
@@ -44,6 +45,69 @@ namespace
 
   SUITE(test_bitset_new_ext_explicit_element_type)
   {
+    template <size_t Width, typename TElement>
+    void check_boundaries()
+    {
+      typedef etl::bitset_ext<Width, TElement> bitset_type;
+      TElement storage[bitset_type::Number_Of_Elements + 2U] = {};
+      storage[0] = storage[bitset_type::Number_Of_Elements + 1U] = TElement(0x5AU);
+      bitset_type data(storage + 1U);
+      bitset_test::check_padding<Width>(data);
+      bitset_test::check_mutations<Width>(data);
+      bitset_test::check_shifts<Width>(data);
+      bitset_test::check_search<Width>(data);
+      CHECK_EQUAL(TElement(0x5AU), storage[0]);
+      CHECK_EQUAL(TElement(0x5AU), storage[bitset_type::Number_Of_Elements + 1U]);
+
+      typename bitset_type::buffer_type buffer;
+      const bitset_type ones(~0ULL, buffer);
+      CHECK_EQUAL((Width < 64U ? Width : 64U), ones.count());
+    }
+
+    TEST(test_non_aligned_explicit_external_storage_boundaries)
+    {
+      check_boundaries<1, uint8_t>();
+      check_boundaries<7, uint8_t>();
+      check_boundaries<8, uint8_t>();
+      check_boundaries<9, uint16_t>();
+      check_boundaries<15, uint16_t>();
+      check_boundaries<16, uint16_t>();
+      check_boundaries<17, uint16_t>();
+      check_boundaries<17, uint32_t>();
+      check_boundaries<31, uint32_t>();
+      check_boundaries<32, uint32_t>();
+      check_boundaries<33, uint32_t>();
+      check_boundaries<33, uint64_t>();
+      check_boundaries<63, uint64_t>();
+      check_boundaries<64, uint64_t>();
+      check_boundaries<65, uint16_t>();
+      check_boundaries<65, uint32_t>();
+      check_boundaries<65, uint64_t>();
+      check_boundaries<129, uint16_t>();
+      check_boundaries<129, uint32_t>();
+      check_boundaries<129, uint64_t>();
+      check_boundaries<130, uint64_t>();
+    }
+
+    TEST(test_extract_all_valid_subranges)
+    {
+      etl::bitset_ext<31, uint32_t>::buffer_type first_buffer;
+      etl::bitset_ext<31, uint32_t> first(first_buffer);
+      bitset_test::check_extract<31, etl::bitset_overflow>(first);
+      etl::bitset_ext<65, uint16_t>::buffer_type buffer16;
+      etl::bitset_ext<65, uint32_t>::buffer_type buffer32;
+      etl::bitset_ext<65, uint16_t> words16(buffer16);
+      etl::bitset_ext<65, uint32_t> words32(buffer32);
+      bitset_test::check_extract<65, etl::bitset_overflow>(words16);
+      bitset_test::check_extract<65, etl::bitset_overflow>(words32);
+      etl::bitset_ext<65, uint64_t>::buffer_type second_buffer;
+      etl::bitset_ext<129, uint64_t>::buffer_type third_buffer;
+      etl::bitset_ext<65, uint64_t> second(second_buffer);
+      etl::bitset_ext<129, uint64_t> third(third_buffer);
+      bitset_test::check_extract<65, etl::bitset_overflow>(second);
+      bitset_test::check_extract<129, etl::bitset_overflow>(third);
+    }
+
     //*************************************************************************
     TEST(test_constants)
     {
