@@ -56,6 +56,94 @@ namespace
     typedef etl::ivector<DC>      IDataDC;
     typedef std::vector<DC>       CompareDataDC;
 
+    struct constructor_error
+    {
+    };
+
+    struct ThrowingValue
+    {
+      explicit ThrowingValue(bool fail)
+      {
+        if (fail)
+        {
+          throw constructor_error();
+        }
+      }
+    };
+
+    TEST(test_emplace_end_constructor_exception_preserves_size)
+    {
+      etl::vector<ThrowingValue, 3> data;
+      CHECK_THROW(data.emplace(data.end(), true), constructor_error);
+      CHECK_EQUAL(size_t(0), data.size());
+      data.uninitialized_resize(0);
+    }
+
+    TEST(test_emplace_back_constructor_exception_preserves_size)
+    {
+      etl::vector<ThrowingValue, 3> data;
+      CHECK_THROW(data.emplace_back(true), constructor_error);
+      CHECK_EQUAL(size_t(0), data.size());
+      data.uninitialized_resize(0);
+    }
+
+    TEST(test_non_trivial_lifetimes_through_mutations)
+    {
+      const int baseline = NDC::get_instance_count();
+      {
+        DataNDC data;
+        data.emplace_back("1");
+        data.emplace_back("2");
+        data.emplace_back("3");
+        CHECK_EQUAL(baseline + 3, NDC::get_instance_count());
+        CHECK(data.erase(data.begin() + 1) == data.begin() + 1);
+        CHECK_EQUAL(baseline + 2, NDC::get_instance_count());
+        data.resize(5, NDC("fill"));
+        CHECK_EQUAL(baseline + 5, NDC::get_instance_count());
+        data.resize(1, NDC("unused"));
+        CHECK_EQUAL(baseline + 1, NDC::get_instance_count());
+        data.assign(size_t(3), NDC("assigned"));
+        CHECK_EQUAL(baseline + 3, NDC::get_instance_count());
+        data.erase(data.begin(), data.end());
+        CHECK_EQUAL(baseline, NDC::get_instance_count());
+        data.emplace_back("reused");
+        data.clear();
+        CHECK_EQUAL(baseline, NDC::get_instance_count());
+        data.emplace_back("destroyed");
+      }
+      CHECK_EQUAL(baseline, NDC::get_instance_count());
+    }
+
+    TEST(test_move_only_insert_erase_swap_and_reuse)
+    {
+      typedef etl::vector<std::unique_ptr<int>, 5> move_vector;
+      move_vector                                  data;
+      int* const                                   first  = new int(1);
+      int* const                                   second = new int(2);
+      data.push_back(std::unique_ptr<int>(first));
+      data.insert(data.begin(), std::unique_ptr<int>(second));
+      CHECK(data[0].get() == second);
+      CHECK(data[1].get() == first);
+      CHECK(data.erase(data.begin()) == data.begin());
+      CHECK(data.front().get() == first);
+      move_vector other;
+      data.swap(other);
+      CHECK(data.empty());
+      CHECK(other.front().get() == first);
+      other.swap(other);
+      CHECK(other.front().get() == first);
+      etl::ivector<std::unique_ptr<int>>& interface   = other;
+      etl::ivector<std::unique_ptr<int>>& same_vector = other;
+      interface                                       = std::move(same_vector);
+      CHECK_EQUAL(size_t(1), other.size());
+      CHECK(other.front().get() == first);
+      data = std::move(other);
+      CHECK(other.empty());
+      CHECK(data.front().get() == first);
+      other.emplace_back(new int(3));
+      CHECK_EQUAL(3, *other.front());
+    }
+
     CompareDataNDC initial_data;
     CompareDataNDC less_data;
     CompareDataNDC greater_data;

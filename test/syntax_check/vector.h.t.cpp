@@ -27,3 +27,14 @@ SOFTWARE.
 ******************************************************************************/
 
 #include <etl/vector.h>
+
+#if defined(ETL_TEST_VECTOR_MOVE_ONLY_EMPLACE)
+  #include <memory>
+
+void test_vector_move_only_emplace()
+{
+  etl::vector<std::unique_ptr<int>, 3> data;
+  data.emplace(data.end(), new int(1));
+  data.emplace(data.begin(), new int(2));
+}
+#endif
