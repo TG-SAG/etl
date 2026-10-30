@@ -318,12 +318,20 @@ namespace etl
     ETL_STATIC_ASSERT(etl::is_integral<TValue>::value, "TValue not an integral type");
     ETL_STATIC_ASSERT(etl::is_integral<TReturn>::value, "TReturn not an integral type");
 
-    ETL_ASSERT((NBits <= etl::integral_limits<TReturn>::bits), ETL_ERROR(binary_out_of_range));
+    ETL_ASSERT_OR_RETURN_VALUE((NBits != 0U) && (NBits <= etl::integral_limits<TReturn>::bits), ETL_ERROR(binary_out_of_range), 0);
 
-    TReturn mask = TReturn(1) << (NBits - 1);
-    value        = value & TValue((TValue(1) << NBits) - 1);
+    typedef typename etl::make_unsigned<TReturn>::type unsigned_t;
 
-    return static_cast<TReturn>(static_cast<TReturn>(value ^ static_cast<TValue>(mask)) - mask);
+    const unsigned_t mask = static_cast<unsigned_t>(etl::integral_limits<unsigned_t>::max >> (etl::integral_limits<unsigned_t>::bits - NBits));
+    const unsigned_t sign = static_cast<unsigned_t>(unsigned_t(1) << (NBits - 1U));
+    const unsigned_t bits = static_cast<unsigned_t>(value) & mask;
+
+    if ((bits & sign) != 0U)
+    {
+      return static_cast<TReturn>(static_cast<TReturn>(-1) - static_cast<TReturn>(mask ^ bits));
+    }
+
+    return static_cast<TReturn>(bits);
   }
 
   //***************************************************************************
@@ -338,12 +346,7 @@ namespace etl
     ETL_STATIC_ASSERT(etl::is_integral<TValue>::value, "TValue not an integral type");
     ETL_STATIC_ASSERT(etl::is_integral<TReturn>::value, "TReturn not an integral type");
 
-    ETL_ASSERT((NBits <= etl::integral_limits<TReturn>::bits), ETL_ERROR(binary_out_of_range));
-
-    TReturn mask = TReturn(1) << (NBits - 1);
-    value        = (value >> SHIFT) & TValue((TValue(1) << NBits) - 1);
-
-    return static_cast<TReturn>(static_cast<TReturn>(value ^ static_cast<TValue>(mask)) - mask);
+    return etl::sign_extend<TReturn>(static_cast<TValue>(value >> SHIFT), NBits);
   }
 
   //***************************************************************************
