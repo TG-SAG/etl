@@ -33,11 +33,45 @@ SOFTWARE.
 #include <type_traits>
 
 #include "etl/private/bitset_legacy.h"
+#include "bitset_test_cases.h"
 
 namespace
 {
   SUITE(test_bitset_legacy)
   {
+    template <size_t Width>
+    void check_boundaries()
+    {
+      etl::bitset<Width> data;
+      bitset_test::check_padding<Width>(data);
+      bitset_test::check_mutations<Width>(data);
+      bitset_test::check_shifts<Width>(data);
+      bitset_test::check_search<Width>(data);
+      data.reset().set(Width - 1U).set(0, true);
+      bitset_test::check_value_shifts<Width>(data);
+      CHECK_EQUAL(Width, (~etl::bitset<Width>()).count());
+      CHECK_EQUAL((Width < 64U ? Width : 64U), etl::bitset<Width>(~0ULL).count());
+    }
+
+    TEST(test_non_aligned_mutations_shifts_and_search)
+    {
+      check_boundaries<1>();
+      check_boundaries<7>();
+      check_boundaries<8>();
+      check_boundaries<9>();
+      check_boundaries<31>();
+      check_boundaries<32>();
+      check_boundaries<33>();
+      check_boundaries<63>();
+      check_boundaries<64>();
+      check_boundaries<65>();
+      check_boundaries<127>();
+      check_boundaries<128>();
+      check_boundaries<129>();
+      check_boundaries<130>();
+    }
+
+#if !defined(ETL_TEST_BITSET_BOUNDARIES_ONLY)
     //*************************************************************************
     TEST(test_constructor)
     {
@@ -1531,5 +1565,6 @@ namespace
 
       etl::bitset<0> shiftbits = bits << 1; // No exception.
     }
+#endif
   }
 } // namespace

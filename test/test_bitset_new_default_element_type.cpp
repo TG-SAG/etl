@@ -37,6 +37,7 @@ SOFTWARE.
 #include "etl/u32string.h"
 #include "etl/wstring.h"
 #include "etl/private/bitset_new.h"
+#include "bitset_test_cases.h"
 
 namespace
 {
@@ -119,6 +120,94 @@ namespace
 
   SUITE(test_bitset_new_default_element_type)
   {
+    template <size_t Width>
+    void check_padding_queries()
+    {
+      etl::bitset<Width> flipped;
+      flipped.flip();
+      CHECK_EQUAL(Width, flipped.count());
+      CHECK(flipped.all());
+      CHECK(flipped.any());
+      CHECK(!flipped.none());
+      CHECK(flipped == etl::bitset<Width>().set());
+
+      const etl::bitset<Width> complemented = ~etl::bitset<Width>();
+      CHECK_EQUAL(Width, complemented.count());
+      CHECK(complemented == etl::bitset<Width>().set());
+
+      const etl::bitset<Width> ones(~0ULL);
+      CHECK_EQUAL((Width < 64U ? Width : 64U), ones.count());
+
+      if (Width < 64U)
+      {
+        const etl::bitset<Width> high_only(1ULL << (Width % 64U));
+        CHECK_EQUAL(size_t(0), high_only.count());
+        CHECK(high_only.none());
+        CHECK(!high_only.any());
+        CHECK(high_only == etl::bitset<Width>());
+      }
+    }
+
+    TEST(test_padding_queries_across_storage_boundaries)
+    {
+      check_padding_queries<1>();
+      check_padding_queries<7>();
+      check_padding_queries<8>();
+      check_padding_queries<9>();
+      check_padding_queries<15>();
+      check_padding_queries<16>();
+      check_padding_queries<17>();
+      check_padding_queries<31>();
+      check_padding_queries<32>();
+      check_padding_queries<33>();
+      check_padding_queries<63>();
+      check_padding_queries<64>();
+      check_padding_queries<65>();
+      check_padding_queries<127>();
+      check_padding_queries<128>();
+      check_padding_queries<129>();
+    }
+
+    template <size_t Width>
+    void check_boundaries()
+    {
+      etl::bitset<Width> data;
+      bitset_test::check_padding<Width>(data);
+      bitset_test::check_mutations<Width>(data);
+      bitset_test::check_shifts<Width>(data);
+      bitset_test::check_search<Width>(data);
+      data.reset().set(Width - 1U).set(0, true);
+      bitset_test::check_value_shifts<Width>(data);
+    }
+
+    TEST(test_non_aligned_mutations_shifts_and_search)
+    {
+      check_boundaries<1>();
+      check_boundaries<7>();
+      check_boundaries<8>();
+      check_boundaries<9>();
+      check_boundaries<31>();
+      check_boundaries<32>();
+      check_boundaries<33>();
+      check_boundaries<63>();
+      check_boundaries<64>();
+      check_boundaries<65>();
+      check_boundaries<127>();
+      check_boundaries<128>();
+      check_boundaries<129>();
+      check_boundaries<130>();
+    }
+
+    TEST(test_extract_all_valid_subranges)
+    {
+      etl::bitset<31> single_boundary;
+      etl::bitset<65> word_boundary;
+      etl::bitset<129> multiple_words;
+      bitset_test::check_extract<31, etl::bitset_overflow>(single_boundary);
+      bitset_test::check_extract<65, etl::bitset_overflow>(word_boundary);
+      bitset_test::check_extract<129, etl::bitset_overflow>(multiple_words);
+    }
+
     //*************************************************************************
     TEST(test_constants)
     {
