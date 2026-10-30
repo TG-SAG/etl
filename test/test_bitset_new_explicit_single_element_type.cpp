@@ -37,6 +37,7 @@ SOFTWARE.
 #include "etl/u32string.h"
 #include "etl/wstring.h"
 #include "etl/private/bitset_new.h"
+#include "bitset_test_cases.h"
 
 namespace
 {
@@ -119,6 +120,84 @@ namespace
 
   SUITE(test_bitset_new_explicit_element_type)
   {
+    template <size_t Width, typename TElement>
+    void check_boundaries()
+    {
+      typedef etl::bitset<Width, TElement> bitset_type;
+      bitset_type data;
+      bitset_test::check_padding<Width>(data);
+      bitset_test::check_mutations<Width>(data);
+      bitset_test::check_shifts<Width>(data);
+      bitset_test::check_search<Width>(data);
+      data.reset().set(Width - 1U).set(0, true);
+      bitset_test::check_value_shifts<Width>(data);
+      CHECK_EQUAL(Width, (~bitset_type()).count());
+      CHECK_EQUAL((Width < 64U ? Width : 64U), bitset_type(~0ULL).count());
+    }
+
+    TEST(test_non_aligned_explicit_storage_boundaries)
+    {
+      check_boundaries<1, uint8_t>();
+      check_boundaries<7, uint8_t>();
+      check_boundaries<8, uint8_t>();
+      check_boundaries<9, uint16_t>();
+      check_boundaries<15, uint16_t>();
+      check_boundaries<16, uint16_t>();
+      check_boundaries<17, uint16_t>();
+      check_boundaries<17, uint32_t>();
+      check_boundaries<31, uint32_t>();
+      check_boundaries<32, uint32_t>();
+      check_boundaries<33, uint32_t>();
+      check_boundaries<33, uint64_t>();
+      check_boundaries<63, uint64_t>();
+      check_boundaries<64, uint64_t>();
+      check_boundaries<65, uint16_t>();
+      check_boundaries<65, uint32_t>();
+      check_boundaries<65, uint64_t>();
+      check_boundaries<129, uint16_t>();
+      check_boundaries<129, uint32_t>();
+      check_boundaries<129, uint64_t>();
+      check_boundaries<130, uint64_t>();
+    }
+
+    TEST(test_extract_all_valid_subranges)
+    {
+      etl::bitset<31, uint32_t> single;
+      bitset_test::check_extract<31, etl::bitset_overflow>(single);
+      etl::bitset<65, uint16_t> words16;
+      etl::bitset<65, uint32_t> words32;
+      bitset_test::check_extract<65, etl::bitset_overflow>(words16);
+      bitset_test::check_extract<65, etl::bitset_overflow>(words32);
+      etl::bitset<65, uint64_t> multiple;
+      etl::bitset<129, uint64_t> three_words;
+      bitset_test::check_extract<65, etl::bitset_overflow>(multiple);
+      bitset_test::check_extract<129, etl::bitset_overflow>(three_words);
+    }
+
+#if ETL_USING_CPP14
+    TEST(test_constexpr_non_aligned_and_word_boundary_operations)
+    {
+      constexpr etl::bitset<31, uint32_t> ones(0xFFFFFFFFU);
+      constexpr etl::bitset<31, uint32_t> flipped = ~etl::bitset<31, uint32_t>();
+      constexpr etl::bitset<129, uint64_t> high = etl::bitset<129, uint64_t>(1ULL) << 128U;
+      constexpr etl::bitset<129, uint64_t> unchanged = high << 0U;
+      constexpr etl::bitset<129, uint64_t> low = high >> 128U;
+      constexpr etl::bitset<129, uint64_t> empty = high << 129U;
+      constexpr size_t found = unchanged.find_next(true, 64U);
+      constexpr uint64_t extracted = unchanged.extract<uint64_t, 65U, 64U>();
+      constexpr int32_t signed31 = ones.extract<int32_t, 0U, 31U>();
+      CHECK_EQUAL(size_t(31), ones.count());
+      CHECK(flipped == ones);
+      CHECK_EQUAL(size_t(1), unchanged.count());
+      CHECK_EQUAL(size_t(128), found);
+      CHECK_EQUAL(size_t(1), low.count());
+      CHECK(low.test(0U));
+      CHECK(empty.none());
+      CHECK_EQUAL(0x8000000000000000ULL, extracted);
+      CHECK_EQUAL(int32_t(-1), signed31);
+    }
+#endif
+
     //*************************************************************************
     TEST(test_constants)
     {
