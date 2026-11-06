@@ -613,7 +613,7 @@ namespace etl
         // Where to start.
         size_t bit = position;
 
-        element_type mask = 1U << position;
+        element_type mask = element_type(1) << position;
 
         // Needs checking?
         if ((state && (*pbuffer != All_Clear_Element)) || (!state && (*pbuffer != All_Set_Element)))
@@ -1104,38 +1104,31 @@ namespace etl
       typedef typename etl::make_unsigned<T>::type unsigned_t;
 
       unsigned_t value(0);
+      bool       first_element = true;
 
-      // Extract the first element, if partially filled.
-      if (active_bits_in_msb < Bits_Per_Element)
+      while (length != 0U)
       {
-        element_type mask = etl::make_lsb_mask< element_type>(active_bits_in_msb);
-        value             = pbuffer[element_index] & mask;
-        length -= active_bits_in_msb;
-        if (length >= Bits_Per_Element)
+        const size_t       chunk_length = etl::min(length, active_bits_in_msb);
+        const element_type mask         = etl::make_lsb_mask<element_type>(chunk_length);
+        const unsigned_t   chunk        = static_cast<unsigned_t>((pbuffer[element_index] >> (active_bits_in_msb - chunk_length)) & mask);
+
+        if (first_element)
         {
-          value = value << Bits_Per_Element;
+          value         = chunk;
+          first_element = false;
         }
-        --element_index;
-      }
-
-      // Loop through the fully filled elements
-      while (length >= Bits_Per_Element)
-      {
-        value |= pbuffer[element_index];
-        length -= Bits_Per_Element;
-        if (length >= Bits_Per_Element)
+        else
         {
-          value = value << Bits_Per_Element;
+          value = static_cast<unsigned_t>((value << chunk_length) | chunk);
         }
-        --element_index;
-      }
 
-      // Extract the last element, if partially filled.
-      if (length != 0)
-      {
-        value             = value << length;
-        element_type mask = etl::make_lsb_mask< element_type>(length);
-        value |= (pbuffer[element_index] >> (Bits_Per_Element - length)) & mask;
+        length -= chunk_length;
+        active_bits_in_msb = Bits_Per_Element;
+
+        if (length != 0U)
+        {
+          --element_index;
+        }
       }
 
       return value;
@@ -1278,11 +1271,16 @@ namespace etl
     static ETL_CONSTEXPR14 size_t find_next(const_pointer pbuffer, size_t number_of_elements, size_t total_bits, bool state, size_t position)
       ETL_NOEXCEPT
     {
+      if (position >= total_bits)
+      {
+        return npos;
+      }
+
       // Where to start.
       size_t index = position >> log2<Bits_Per_Element>::value;
       size_t bit   = position & (Bits_Per_Element - 1);
 
-      element_type mask = 1 << bit;
+      element_type mask = element_type(1) << bit;
 
       // For each element in the bitset...
       while (index < number_of_elements)
@@ -1416,52 +1414,27 @@ namespace etl
       {
         reset_all(pbuffer, number_of_elements);
       }
-      else
+      else if (shift != 0U)
       {
-        // The place where the elements are split when shifting.
-        const size_t split_position = Bits_Per_Element - (shift % Bits_Per_Element);
+        const size_t element_shift = shift / Bits_Per_Element;
+        const size_t bit_shift     = shift % Bits_Per_Element;
 
-        // Where we are shifting from.
-        int src_index = int(number_of_elements - (shift / Bits_Per_Element) - 1U);
-
-        // Where we are shifting to.
-        int dst_index = int(number_of_elements - 1U);
-
-        // Shift control constants.
-        const size_t lsb_shift = Bits_Per_Element - split_position;
-        const size_t msb_shift = split_position;
-
-        const element_type lsb_mask         = element_type(etl::integral_limits<element_type>::max >> (Bits_Per_Element - split_position));
-        const element_type msb_mask         = etl::integral_limits<element_type>::max - lsb_mask;
-        const element_type lsb_shifted_mask = element_type(lsb_mask << lsb_shift);
-
-        // First lsb.
-        element_type lsb   = element_type((pbuffer[src_index] & lsb_mask) << lsb_shift);
-        pbuffer[dst_index] = lsb;
-        --src_index;
-
-        // Now do the shifting.
-        while (src_index >= 0)
+        for (size_t destination = number_of_elements; destination > element_shift; --destination)
         {
-          // Shift msb.
-          element_type msb   = element_type((pbuffer[src_index] & msb_mask) >> msb_shift);
-          pbuffer[dst_index] = pbuffer[dst_index] | msb;
-          --dst_index;
+          const size_t source = destination - element_shift - 1U;
+          element_type value  = element_type(pbuffer[source] << bit_shift);
 
-          // Shift lsb.
-          lsb                = element_type((pbuffer[src_index] & lsb_mask) << lsb_shift);
-          pbuffer[dst_index] = lsb;
-          --src_index;
+          if ((bit_shift != 0U) && (source != 0U))
+          {
+            value |= element_type(pbuffer[source - 1U] >> (Bits_Per_Element - bit_shift));
+          }
+
+          pbuffer[destination - 1U] = value;
         }
 
-        // Clear the remaining bits.
-        // First lsb.
-        pbuffer[dst_index] &= lsb_shifted_mask;
-
-        // The other remaining bytes on the right.
-        for (int i = 0; i < dst_index; ++i)
+        for (size_t destination = 0; destination < element_shift; ++destination)
         {
-          pbuffer[i] = 0;
+          pbuffer[destination] = All_Clear_Element;
         }
       }
     }
@@ -1475,54 +1448,27 @@ namespace etl
       {
         reset_all(pbuffer, number_of_elements);
       }
-      else
+      else if (shift != 0U)
       {
-        // The place where the elements are split when shifting.
-        const size_t split_position = shift % Bits_Per_Element;
+        const size_t element_shift = shift / Bits_Per_Element;
+        const size_t bit_shift     = shift % Bits_Per_Element;
 
-        // Where we are shifting from.
-        int src_index = int(shift / Bits_Per_Element);
-
-        // Where we are shifting to.
-        int dst_index = 0;
-
-        // Shift control constants.
-        const size_t lsb_shift = Bits_Per_Element - split_position;
-        const size_t msb_shift = split_position;
-
-        const element_type lsb_mask         = element_type(etl::integral_limits<element_type>::max >> (Bits_Per_Element - split_position));
-        const element_type msb_mask         = etl::integral_limits<element_type>::max - lsb_mask;
-        const element_type msb_shifted_mask = element_type(msb_mask >> msb_shift);
-
-        // Now do the shifting.
-        while (src_index < int(number_of_elements - 1))
+        for (size_t destination = 0; destination < number_of_elements - element_shift; ++destination)
         {
-          // Shift msb.
-          element_type msb = element_type((pbuffer[src_index] & msb_mask) >> msb_shift);
-          ++src_index;
+          const size_t source = destination + element_shift;
+          element_type value  = element_type(pbuffer[source] >> bit_shift);
 
-          // Shift lsb.
-          element_type lsb = element_type((pbuffer[src_index] & lsb_mask) << lsb_shift);
+          if ((bit_shift != 0U) && (source + 1U < number_of_elements))
+          {
+            value |= element_type(pbuffer[source + 1U] << (Bits_Per_Element - bit_shift));
+          }
 
-          // Combine them.
-          pbuffer[dst_index] = lsb | msb;
-          ++dst_index;
+          pbuffer[destination] = value;
         }
 
-        // Final msb.
-        element_type msb   = element_type((pbuffer[src_index] & msb_mask) >> msb_shift);
-        pbuffer[dst_index] = msb;
-
-        // Clear the remaining bits.
-        // First msb.
-        pbuffer[dst_index] &= msb_shifted_mask;
-        ++dst_index;
-
-        // The other remaining bytes.
-        while (dst_index < int(number_of_elements))
+        for (size_t destination = number_of_elements - element_shift; destination < number_of_elements; ++destination)
         {
-          pbuffer[dst_index] = 0;
-          ++dst_index;
+          pbuffer[destination] = All_Clear_Element;
         }
       }
     }
@@ -1816,6 +1762,7 @@ namespace etl
       : buffer()
     {
       implementation::template initialise<element_type>(buffer, Number_Of_Elements, static_cast<unsigned long long>(value));
+      buffer[Number_Of_Elements - 1U] &= Top_Mask;
     }
 
     //*************************************************************************
@@ -2249,6 +2196,7 @@ namespace etl
     ETL_CONSTEXPR14 bitset<Active_Bits, TElement>& flip() ETL_NOEXCEPT
     {
       implementation::flip_all(buffer, Number_Of_Elements);
+      buffer[Number_Of_Elements - 1U] &= Top_Mask;
 
       return *this;
     }
@@ -2389,7 +2337,7 @@ namespace etl
     {
       etl::bitset<Active_Bits, TElement> temp(*this);
 
-      implementation::flip_all(temp.buffer, Number_Of_Elements);
+      temp.flip();
 
       return temp;
     }
@@ -2401,7 +2349,7 @@ namespace etl
     {
       etl::bitset<Active_Bits, TElement> temp(*this);
 
-      implementation::operator_shift_left(temp.buffer, Number_Of_Elements, Active_Bits, shift);
+      temp <<= shift;
 
       return temp;
     }
@@ -2419,6 +2367,8 @@ namespace etl
       {
         implementation::operator_shift_left(buffer, Number_Of_Elements, Active_Bits, shift);
       }
+
+      buffer[Number_Of_Elements - 1U] &= Top_Mask;
 
       return *this;
     }
@@ -2755,6 +2705,7 @@ namespace etl
     {
       ETL_ASSERT(pbuffer != ETL_NULLPTR, ETL_ERROR(etl::bitset_invalid_buffer));
       implementation::template initialise<element_type>(pbuffer, Number_Of_Elements, value);
+      pbuffer[Number_Of_Elements - 1U] &= Top_Mask;
     }
 
     //*************************************************************************
@@ -2765,6 +2716,7 @@ namespace etl
       : pbuffer(buffer.data())
     {
       implementation::template initialise<element_type>(pbuffer, Number_Of_Elements, static_cast<unsigned long long>(value));
+      pbuffer[Number_Of_Elements - 1U] &= Top_Mask;
     }
 
     //*************************************************************************
@@ -3246,6 +3198,7 @@ namespace etl
     ETL_CONSTEXPR14 bitset_ext<Active_Bits, TElement>& flip() ETL_NOEXCEPT
     {
       implementation::flip_all(pbuffer, Number_Of_Elements);
+      pbuffer[Number_Of_Elements - 1U] &= Top_Mask;
 
       return *this;
     }
@@ -3349,6 +3302,7 @@ namespace etl
     ETL_CONSTEXPR14 bitset_ext<Active_Bits, TElement>& operator<<=(size_t shift) ETL_NOEXCEPT
     {
       implementation::operator_shift_left(pbuffer, Number_Of_Elements, Active_Bits, shift);
+      pbuffer[Number_Of_Elements - 1U] &= Top_Mask;
 
       return *this;
     }

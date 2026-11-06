@@ -342,14 +342,19 @@ namespace etl
     typename etl::enable_if<!etl::is_pointer<TIterator>::value, void>::type assign(TIterator first, TIterator last)
     {
 #if ETL_IS_DEBUG_BUILD
-      difference_type d = etl::distance(first, last);
-      ETL_ASSERT_OR_RETURN(static_cast<size_t>(d) <= CAPACITY, ETL_ERROR(vector_full));
+      if ETL_IF_CONSTEXPR (!etl::is_input_iterator<TIterator>::value)
+      {
+        difference_type d = etl::distance(first, last);
+        ETL_ASSERT_OR_RETURN(static_cast<size_t>(d) <= CAPACITY, ETL_ERROR(vector_full));
+      }
 #endif
 
       initialise();
 
       while (first != last)
       {
+        // Single pass ranges cannot be checked in advance.
+        ETL_ASSERT_OR_RETURN(!etl::is_input_iterator<TIterator>::value || (size() != CAPACITY), ETL_ERROR(vector_full));
         *p_end++ = (void*)(*first);
         ++first;
       }

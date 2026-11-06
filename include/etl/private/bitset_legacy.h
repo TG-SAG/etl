@@ -693,7 +693,7 @@ namespace etl
       size_t index;
       size_t bit;
 
-      if (Number_Of_Elements == 0)
+      if ((Number_Of_Elements == 0) || (position >= Active_Bits))
       {
         return ibitset::npos;
       }
@@ -708,7 +708,7 @@ namespace etl
         bit   = position & (Bits_Per_Element - 1);
       }
 
-      element_type mask = 1 << bit;
+      element_type mask = element_type(1) << bit;
 
       // For each element in the bitset...
       while (index < Number_Of_Elements)
@@ -808,6 +808,11 @@ namespace etl
     //*************************************************************************
     ibitset& operator<<=(size_t shift)
     {
+      if (shift == 0U)
+      {
+        return *this;
+      }
+
       if (shift >= Active_Bits)
       {
         reset();
@@ -819,10 +824,11 @@ namespace etl
         {
           pdata[0] <<= shift;
         }
-        else if (shift == Bits_Per_Element)
+        else if ((shift % Bits_Per_Element) == 0U)
         {
-          etl::copy_backward(pdata, pdata + Number_Of_Elements - 1U, pdata + Number_Of_Elements);
-          pdata[0] = 0;
+          const size_t element_shift = shift / Bits_Per_Element;
+          etl::copy_backward(pdata, pdata + Number_Of_Elements - element_shift, pdata + Number_Of_Elements);
+          etl::fill_n(pdata, element_shift, ALL_CLEAR);
         }
         else
         {
@@ -886,6 +892,11 @@ namespace etl
     //*************************************************************************
     ibitset& operator>>=(size_t shift)
     {
+      if (shift == 0U)
+      {
+        return *this;
+      }
+
       if (shift >= Active_Bits)
       {
         reset();
@@ -897,11 +908,11 @@ namespace etl
         {
           pdata[0] >>= shift;
         }
-        // Shift is the size of an element?
-        else if (shift == Bits_Per_Element)
+        else if ((shift % Bits_Per_Element) == 0U)
         {
-          etl::copy(pdata + 1, pdata + Number_Of_Elements, pdata);
-          pdata[Number_Of_Elements - 1U] = 0;
+          const size_t element_shift = shift / Bits_Per_Element;
+          etl::copy(pdata + element_shift, pdata + Number_Of_Elements, pdata);
+          etl::fill_n(pdata + Number_Of_Elements - element_shift, element_shift, ALL_CLEAR);
         }
         else
         {

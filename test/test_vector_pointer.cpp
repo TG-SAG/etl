@@ -34,6 +34,7 @@ SOFTWARE.
 #include <vector>
 
 #include "etl/vector.h"
+#include "vector_test_cases.h"
 
 namespace
 {
@@ -47,6 +48,36 @@ namespace
     typedef etl::ivector<const int*>      CIData;
     typedef std::vector<int*>             Compare_Data;
     typedef std::vector<const int*>       CCompare_Data;
+
+    TEST(test_insert_erase_null_and_repeated_pointer_boundaries)
+    {
+      int                  objects[] = {1, 2, 3};
+      int* const           values[]  = {nullptr, &objects[0], &objects[0], &objects[1], nullptr, &objects[2], nullptr};
+      etl::vector<int*, 7> data;
+      vector_test::check_insert_erase(data, values);
+      const int* const           constant_values[] = {nullptr, &objects[0], &objects[0]};
+      etl::vector<const int*, 3> constant_data;
+      vector_test::check_insert_erase(constant_data, constant_values);
+    }
+
+    TEST(test_pointer_resize_explicit_null_and_reuse)
+    {
+      int  object = 1;
+      Data data(3, &object);
+      data.resize(1);
+      data.resize(5, nullptr);
+      CHECK(data.front() == &object);
+      for (size_t position = 1; position < data.size(); ++position)
+      {
+        CHECK(data[position] == nullptr);
+      }
+      data.clear();
+      data.push_back(nullptr);
+      data.push_back(&object);
+      data.swap(data);
+      CHECK(data[0] == nullptr);
+      CHECK(data[1] == &object);
+    }
 
     Compare_Data initial_data;
     Compare_Data less_data;

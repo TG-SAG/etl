@@ -31,9 +31,12 @@ SOFTWARE.
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <iterator>
+#include <sstream>
 #include <vector>
 
 #include "etl/vector.h"
+#include "vector_test_cases.h"
 
 namespace
 {
@@ -44,6 +47,129 @@ namespace
     typedef etl::vector<int, SIZE> Data;
     typedef etl::ivector<int>      IData;
     typedef std::vector<int>       Compare_Data;
+
+    TEST(test_insert_erase_all_small_capacity_boundaries)
+    {
+      const int           values[] = {10, 20, 30, 40, 50, 60, 70};
+      etl::vector<int, 1> one;
+      etl::vector<int, 3> three;
+      etl::vector<int, 7> seven;
+      vector_test::check_insert_erase(one, values);
+      vector_test::check_insert_erase(three, values);
+      vector_test::check_insert_erase(seven, values);
+    }
+
+    TEST(test_insert_aliased_value_at_every_position)
+    {
+      for (size_t position = 0; position <= 4U; ++position)
+      {
+        for (size_t source = 0; source < 4U; ++source)
+        {
+          const int    values[] = {10, 20, 30, 40};
+          Data         data(std::begin(values), std::end(values));
+          Compare_Data expected(std::begin(values), std::end(values));
+          const int    value = expected[source];
+          expected.insert(expected.begin() + ptrdiff_t(position), value);
+          const Data::iterator inserted = data.insert(data.begin() + ptrdiff_t(position), data[source]);
+          CHECK(inserted == data.begin() + ptrdiff_t(position));
+          CHECK_EQUAL(expected.size(), data.size());
+          CHECK(std::equal(expected.begin(), expected.end(), data.begin()));
+        }
+      }
+    }
+
+    TEST(test_insert_aliased_repeated_value)
+    {
+      for (size_t position = 0; position <= 4U; ++position)
+      {
+        for (size_t source = 0; source < 4U; ++source)
+        {
+          const int    values[] = {10, 20, 30, 40};
+          Data         data(std::begin(values), std::end(values));
+          Compare_Data expected(std::begin(values), std::end(values));
+          const int    value = expected[source];
+          expected.insert(expected.begin() + ptrdiff_t(position), size_t(3), value);
+          data.insert(data.begin() + ptrdiff_t(position), size_t(3), data[source]);
+          CHECK_EQUAL(expected.size(), data.size());
+          CHECK(std::equal(expected.begin(), expected.end(), data.begin()));
+        }
+      }
+    }
+
+    TEST(test_empty_ranges_and_zero_count_preserve_full_vector)
+    {
+      Data       data(SIZE, 42);
+      const int  value           = 99;
+      int* const original_buffer = data.data();
+      CHECK(data.erase(data.begin(), data.begin()) == data.begin());
+      CHECK(data.erase(data.end(), data.end()) == data.end());
+      data.insert(data.begin() + 3, size_t(0), value);
+      data.insert(data.end(), &value, &value);
+      CHECK_EQUAL(SIZE, data.size());
+      CHECK(data.full());
+      CHECK(data.data() == original_buffer);
+      CHECK(std::all_of(data.begin(), data.end(), [](int item) { return item == 42; }));
+    }
+
+    TEST(test_capacity_one_reuse_and_checked_boundaries)
+    {
+      etl::vector<int, 1> data;
+      int* const          original_buffer = data.data();
+      CHECK_THROW(data.pop_back(), etl::vector_empty);
+      CHECK_THROW(data.at(0), etl::vector_out_of_bounds);
+      data.reserve(1);
+      data.push_back(42);
+      CHECK(data.full());
+      CHECK_EQUAL(size_t(0), data.available());
+      CHECK_THROW(data.push_back(99), etl::vector_full);
+      CHECK_THROW(data.emplace_back(99), etl::vector_full);
+      CHECK_THROW(data.insert(data.end(), 99), etl::vector_full);
+      CHECK_THROW(data.emplace(data.end(), 99), etl::vector_full);
+      CHECK_THROW(data.resize(2), etl::vector_full);
+      CHECK_THROW(data.reserve(2), etl::vector_out_of_bounds);
+      CHECK_EQUAL(size_t(1), data.size());
+      CHECK_EQUAL(42, data.front());
+      const etl::vector<int, 1>& constant = data;
+      CHECK_THROW(constant.at(1), etl::vector_out_of_bounds);
+      CHECK_THROW(constant[1], etl::vector_out_of_bounds);
+      CHECK_THROW(data[1], etl::vector_out_of_bounds);
+      CHECK(data.erase(data.begin()) == data.end());
+      data.resize(1, 7);
+      CHECK_EQUAL(7, data.back());
+      data.clear();
+      data.assign(size_t(1), 8);
+      CHECK_EQUAL(8, data[0]);
+      CHECK(data.data() == original_buffer);
+    }
+
+    TEST(test_constructor_from_single_pass_input_range)
+    {
+      std::istringstream               input("10 20 30 40");
+      const std::istream_iterator<int> first(input);
+      const std::istream_iterator<int> last;
+      const int                        expected[] = {10, 20, 30, 40};
+      Data                             data(first, last);
+      CHECK_EQUAL(size_t(4), data.size());
+      if (data.size() == 4U)
+      {
+        CHECK(std::equal(std::begin(expected), std::end(expected), data.begin()));
+      }
+    }
+
+    TEST(test_assign_from_single_pass_input_range)
+    {
+      std::istringstream               input("10 20 30 40");
+      const std::istream_iterator<int> first(input);
+      const std::istream_iterator<int> last;
+      const int                        expected[] = {10, 20, 30, 40};
+      Data                             data(2, 99);
+      data.assign(first, last);
+      CHECK_EQUAL(size_t(4), data.size());
+      if (data.size() == 4U)
+      {
+        CHECK(std::equal(std::begin(expected), std::end(expected), data.begin()));
+      }
+    }
 
     Compare_Data initial_data;
     Compare_Data less_data;
@@ -129,6 +255,7 @@ namespace
 
       CHECK(data.size() == INITIAL_SIZE);
       CHECK(!data.empty());
+      CHECK(std::all_of(data.begin(), data.end(), [](int value) { return value == 0; }));
     }
 
     //*************************************************************************
@@ -165,6 +292,7 @@ namespace
 
       CHECK(data.size() == SIZE);
       CHECK(!data.empty());
+      CHECK(std::equal(compare_data.begin(), compare_data.end(), data.begin()));
     }
 
 #if ETL_HAS_INITIALIZER_LIST
@@ -1618,7 +1746,7 @@ namespace
 #endif
 
     //*************************************************************************
-    TEST(test_fill)
+    TEST_FIXTURE(SetupFixture, test_fill)
     {
       etl::vector<int, 10> data(initial_data.begin(), initial_data.end());
 

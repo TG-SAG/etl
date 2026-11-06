@@ -35,6 +35,7 @@ SOFTWARE.
 #include <vector>
 
 #include "etl/vector.h"
+#include "vector_test_cases.h"
 
 namespace
 {
@@ -53,6 +54,18 @@ namespace
     typedef etl::vector_ext<int> Data;
     typedef etl::ivector<int>    IData;
     typedef std::vector<int>     Compare_Data;
+
+    TEST(test_external_buffer_insert_erase_boundaries_and_guards)
+    {
+      const int values[]          = {10, 20, 30, 40, 50, 60, 70};
+      int       guarded_buffer[9] = {};
+      guarded_buffer[0]           = 12345;
+      guarded_buffer[8]           = 67890;
+      Data data(guarded_buffer + 1, 7);
+      vector_test::check_insert_erase(data, values);
+      CHECK_EQUAL(12345, guarded_buffer[0]);
+      CHECK_EQUAL(67890, guarded_buffer[8]);
+    }
 
     Compare_Data initial_data;
     Compare_Data less_data;

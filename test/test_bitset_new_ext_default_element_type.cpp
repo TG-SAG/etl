@@ -32,6 +32,7 @@ SOFTWARE.
 #include <limits>
 #include <type_traits>
 
+#include "bitset_test_cases.h"
 #include "etl/endianness.h"
 #include "etl/string.h"
 #include "etl/u16string.h"
@@ -45,6 +46,53 @@ namespace
 
   SUITE(test_bitset_new_ext_default_element_type)
   {
+    template <size_t Width>
+    void check_boundaries()
+    {
+      typedef etl::bitset_ext<Width>     bitset_type;
+      typename bitset_type::element_type storage[bitset_type::Number_Of_Elements + 2U] = {};
+      storage[0] = storage[bitset_type::Number_Of_Elements + 1U] = 0x5AU;
+      bitset_type data(storage + 1U);
+      bitset_test::check_padding<Width>(data);
+      bitset_test::check_mutations<Width>(data);
+      bitset_test::check_shifts<Width>(data);
+      bitset_test::check_search<Width>(data);
+      CHECK_EQUAL(0x5AU, storage[0]);
+      CHECK_EQUAL(0x5AU, storage[bitset_type::Number_Of_Elements + 1U]);
+
+      typename bitset_type::buffer_type buffer;
+      const bitset_type                 ones(~0ULL, buffer);
+      CHECK_EQUAL((Width < 64U ? Width : 64U), ones.count());
+    }
+
+    TEST(test_non_aligned_external_storage_boundaries)
+    {
+      check_boundaries<1>();
+      check_boundaries<7>();
+      check_boundaries<8>();
+      check_boundaries<9>();
+      check_boundaries<31>();
+      check_boundaries<32>();
+      check_boundaries<33>();
+      check_boundaries<63>();
+      check_boundaries<64>();
+      check_boundaries<65>();
+      check_boundaries<127>();
+      check_boundaries<128>();
+      check_boundaries<129>();
+      check_boundaries<130>();
+    }
+
+    TEST(test_extract_all_valid_subranges)
+    {
+      etl::bitset_ext<65>::buffer_type  first_buffer;
+      etl::bitset_ext<129>::buffer_type second_buffer;
+      etl::bitset_ext<65>               first(first_buffer);
+      etl::bitset_ext<129>              second(second_buffer);
+      bitset_test::check_extract<65, etl::bitset_overflow>(first);
+      bitset_test::check_extract<129, etl::bitset_overflow>(second);
+    }
+
     //*************************************************************************
     TEST(test_constants)
     {

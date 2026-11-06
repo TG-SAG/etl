@@ -1533,6 +1533,48 @@ namespace
 #endif
 
     //*************************************************************************
+    template <typename TReturn>
+    void check_runtime_sign_extension_boundaries()
+    {
+      typedef typename etl::make_unsigned<TReturn>::type unsigned_t;
+      const size_t                                       width    = etl::integral_limits<TReturn>::bits;
+      const unsigned_t                                   all_bits = etl::integral_limits<unsigned_t>::max;
+      const unsigned_t                                   sign     = static_cast<unsigned_t>(unsigned_t(1) << (width - 1U));
+
+      CHECK_EQUAL(etl::integral_limits<TReturn>::min, etl::sign_extend<TReturn>(sign, width));
+      CHECK_EQUAL(etl::integral_limits<TReturn>::max, etl::sign_extend<TReturn>(static_cast<unsigned_t>(sign - 1U), width));
+      CHECK_EQUAL(TReturn(-1), etl::sign_extend<TReturn>(all_bits, width));
+      CHECK_EQUAL(TReturn(-1), etl::sign_extend<TReturn>(all_bits, width - 1U));
+      CHECK_EQUAL(TReturn(-1), etl::sign_extend<TReturn>(TReturn(-1), width - 1U));
+      CHECK_EQUAL(TReturn(-1), etl::sign_extend<TReturn>(all_bits, width - 1U, 1U));
+      CHECK_EQUAL(static_cast<TReturn>(etl::integral_limits<TReturn>::min / 2),
+                  etl::sign_extend<TReturn>(static_cast<unsigned_t>(sign >> 1U), width - 1U));
+    }
+
+    TEST(test_runtime_sign_extension_boundaries)
+    {
+      check_runtime_sign_extension_boundaries<int8_t>();
+      check_runtime_sign_extension_boundaries<int16_t>();
+      check_runtime_sign_extension_boundaries<int32_t>();
+      check_runtime_sign_extension_boundaries<int64_t>();
+      CHECK_EQUAL(int64_t(-1), etl::sign_extend<int64_t>(uint8_t(0xFFU), 8U));
+      CHECK_EQUAL(int8_t(-1), etl::sign_extend<int8_t>(~0ULL, 8U));
+      CHECK_THROW(etl::sign_extend<int32_t>(0, 0U), etl::binary_out_of_range);
+      CHECK_THROW(etl::sign_extend<int32_t>(0, 33U), etl::binary_out_of_range);
+    }
+
+#if ETL_USING_CPP14
+    TEST(test_runtime_sign_extension_boundaries_constexpr)
+    {
+      constexpr int32_t signed31 = etl::sign_extend<int32_t>(int32_t(0x7FFFFFFF), 31U);
+      constexpr int64_t signed63 = etl::sign_extend<int64_t>(int64_t(0x7FFFFFFFFFFFFFFFLL), 63U);
+      constexpr int64_t signed64 = etl::sign_extend<int64_t>(0x8000000000000000ULL, 64U);
+      CHECK_EQUAL(int32_t(-1), signed31);
+      CHECK_EQUAL(int64_t(-1), signed63);
+      CHECK_EQUAL(etl::integral_limits<int64_t>::min, signed64);
+    }
+#endif
+
     TEST(test_sign_extend_template2)
     {
       uint8_t value8 = 0x2A;
