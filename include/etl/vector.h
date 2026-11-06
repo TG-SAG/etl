@@ -664,9 +664,18 @@ namespace etl
       }
       else
       {
+        // value may refer to an element that is about to be shifted.
+        pointer p_value = etl::addressof(value);
+
         create_back(etl::move(back()));
         etl::move_backward(position_, p_end - 2, p_end - 1);
-        *position_ = etl::move(value);
+
+        if ((p_value >= position_) && (p_value < p_end))
+        {
+          ++p_value;
+        }
+
+        *position_ = etl::move(*p_value);
       }
 
       return position_;
@@ -859,6 +868,14 @@ namespace etl
 
       size_t copy_new_n      = construct_old_n;
       size_t construct_new_n = insert_n - copy_new_n;
+
+      // value may refer to an element that is about to be shifted.
+      const_pointer p_value = etl::addressof(value);
+
+      if ((p_value >= position_) && (p_value < p_end))
+      {
+        p_value += n;
+      }
 
       // Construct old.
       etl::uninitialized_move(p_end - construct_old_n, p_end, p_construct_old);
